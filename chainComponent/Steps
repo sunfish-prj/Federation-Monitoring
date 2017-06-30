@@ -1,0 +1,70 @@
+1) Prepare the hosting machine by following the instructions at http://hyperledger-fabric.readthedocs.io/en/latest/prereqs.html
+
+2) Setup your GOPATH environment variable as required.
+
+3) Copy the "github.com" directory from the "DMKeyIntegration" directory to $GOPATH/src/
+
+4) Copy the RIDMKey directory from the "DMKeyIntegration" directory at any preferred place.
+
+5) cd into RIDMKey directory.
+
+6) Issue the following command to make shell script executable:
+
+	chmod a+x channel_test.sh
+
+7) Issue the following command to install the required node packages:
+
+	npm install
+
+8) Update the "goPath" config field in RIDMKey/config.json with the go path directory of the host (as printed by the "echo $GOPATH" command)
+
+9) Update the "dockerIP" cofig field in RIDMKey/config.ini with the IP address of the docker interface (for ubuntu, use the ifconfig command to get the IP address of the docker interface for the host machine)
+
+10) Within the RIDMKey directory, issue the following command in a terminal. This creates the fabric blockchain and initiates and deploys the required entities for the particular blockchain.
+
+	docker-compose -f docker-compose-gettingstarted.yml up -d
+
+11) In another terminal, use the command "docker exec -it cli bash" to connect to cli container and then issue: "more results.txt". Repeat "more results.txt" until the following outputs are printed. This ensures that all peers have joined the created channel.
+
+SUCCESSFUL CHANNEL CREATION
+SUCCESSFUL JOIN CHANNEL on PEER0
+SUCCESSFUL JOIN CHANNEL on PEER1
+SUCCESSFUL JOIN CHANNEL on PEER2
+
+12) In different terminals, the following commands can be used to trace the logs of the orderer and peer0 (or peer1/peer2 by changing the respective value) respectively :
+
+docker logs -f orderer
+
+docker logs -f peer0
+
+13) In another terminal, within the RIDMKey directory, the following command needs to be issued to deploy the smart contract (chaincode):
+
+node deploy.js 
+
+14) Wait until the following output is printed. This confirms that the smart contract has been successfully deployed in the fabric blockchain.
+
+The chaincode transaction has been successfully committed
+
+15) In the same terminal (or in a different terminal), within the RIDMKey directory, the following command needs to be issued. This starts the node server for the registry interface, listening at port 8075.
+
+node ri.js
+
+16) Wait until the 'server started' output is printed in the terminal. This indicates that the node server for RI has been successfully started.
+
+17) Test the interface by registering, retrieving, updating and deleting some dummy data, use the test cases from the from the testCases file. For these test cases, docker_IP needs to be updated accordingly. The "index" value is the value that is printed once a key is registered. 
+
+18) To get the output of the smart-contract, the following command can be issued after a single has been registered. Here, "..." represents the corresponding container name.
+
+docker logs -f peer0-peer0... 
+
+19) Once finished, issue the following two commands to remove the fabric containers:
+
+	docker stop $(docker ps -a -q
+
+	docker rm $(docker ps -a -q
+
+20) Repeat the steps from step 10 to deploy the smart contract and utilise the ri.
+
+============================================
+Need to configure the requestorID and token in the config.ini file.........
+
