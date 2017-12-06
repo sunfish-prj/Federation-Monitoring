@@ -10,8 +10,6 @@
  * You should have received a copy of the GNU General Public License along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-//Author: Md Sadek Ferdous
-
 package sunfish.frm.proxy;
 
 import java.io.BufferedReader;
@@ -26,6 +24,7 @@ import javax.servlet.http.HttpServletRequestWrapper;
 
 import org.apache.commons.io.IOUtils;
 
+// Provides a convenient implementation of the HttpServletRequest interface that can be subclassed by developers wishing to adapt the request to a Servlet.
 public class CachedServletRequest extends HttpServletRequestWrapper {
 	  private ByteArrayOutputStream cachedBytes;
 
@@ -37,8 +36,8 @@ public class CachedServletRequest extends HttpServletRequestWrapper {
 	  public ServletInputStream getInputStream() throws IOException {
 	    if (cachedBytes == null)
 	      cacheInputStream();
-
-	      return new CachedServletInputStream();
+	    
+	    return new CachedServletInputStream();	// Return the CachedServletInputStream() with the cachedBytes
 	  }
 
 	  @Override

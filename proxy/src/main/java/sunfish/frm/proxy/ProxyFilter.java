@@ -10,20 +10,22 @@
  * You should have received a copy of the GNU General Public License along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-//Author: Md Sadek Ferdous
+//Author: Stefano De Angelis
 
 package sunfish.frm.proxy;
  
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.io.StringReader;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Enumeration;
+import java.util.List;
 
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
@@ -38,244 +40,269 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
 import org.json.JSONObject;
 import org.json.simple.parser.JSONParser;
+import org.xml.sax.InputSource;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
-
 import org.apache.http.impl.client.HttpClientBuilder;
  
 public class ProxyFilter implements Filter {
-
-	private static class ByteArrayServletStream extends ServletOutputStream {
-
-		ByteArrayOutputStream baos;
-
-		ByteArrayServletStream(ByteArrayOutputStream baos) {
-			this.baos = baos;
-		}
-
-		public void write(int param) throws IOException {
-			baos.write(param);
-		}
-	}
-
-	private static class ByteArrayPrintWriter {
-
-		private ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-		private PrintWriter pw = new PrintWriter(baos);
-
-		private ServletOutputStream sos = new ByteArrayServletStream(baos);
-
-		public PrintWriter getWriter() {
-			return pw;
-		}
-
-		public ServletOutputStream getStream() {
-			return sos;
-		}
-
-		byte[] toByteArray() {
-			return baos.toByteArray();
-		}
-	}
-
-	private class BufferedServletInputStream extends ServletInputStream {
-
-		ByteArrayInputStream bais;
-
-		public BufferedServletInputStream(ByteArrayInputStream bais) {
-			this.bais = bais;
-		}
-
-		public int available() {
-			return bais.available();
-		}
-
-		public int read() {
-			return bais.read();
-		}
-
-		public int read(byte[] buf, int off, int len) {
-			return bais.read(buf, off, len);
-		}
-
-	}		
-
+	
+	private ServletContext context;
+	private final String catalina_home = "/usr/local/tomcat/conf/";
+	private int req_count, res_count;
+	
 	public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain)
 			throws IOException, ServletException {
 
-		final HttpServletRequest httpRequest = (HttpServletRequest) servletRequest;
+		HttpServletRequest httpRequest = (HttpServletRequest) servletRequest;
+		HttpServletResponse response = (HttpServletResponse) servletResponse;
 		
 		/* wrap the request in order to read the inputstream multiple times */
-		CachedServletRequest multiReadRequest = new CachedServletRequest((HttpServletRequest) servletRequest);
+		CachedServletRequest multiReadRequest = new CachedServletRequest(httpRequest);
 		
+		/* *
+		 * Retrieve Headers and content-type *
+		 * *
+		 * * */
+		boolean content_type = false;
+		
+		//this.context.log(" \n\nRetrieving Headers");
+		Enumeration<String> headerNames = httpRequest.getHeaderNames();
+		while(headerNames.hasMoreElements()) {
+		  String headerName = headerNames.nextElement();
+		  if (headerName.equals("content-type"))
+			  content_type = true;
+		  //this.context.log("Header Name - " + headerName + ", Value - " + httpRequest.getHeader(headerName));
+		}
+		
+		
+		/* *
+		 * Retrieve Parameters *
+		 * *
+		 * *
+		this.context.log("\n\nRetrieving Parameters");
+        Enumeration<String> params = httpRequest.getParameterNames();
+        while(params.hasMoreElements()){
+            String paramName = (String)params.nextElement();
+            this.context.log(paramName + " = " + httpRequest.getParameter(paramName));
+        }
+        */
+		
+        /*										
+         * 	Retrieve the body in a StringBuffer *
+         */
+        this.context.log("\n\nRetrieving request Body");	
 		StringBuffer jb = new StringBuffer();
 		String line = null;
 		BufferedReader reader = new BufferedReader(new InputStreamReader(multiReadRequest.getInputStream()));
 		
+		// Populate the StringBuffer with the inputstream
 		try {
             while ((line = reader.readLine()) != null) {
                 jb.append(line);
             }
         } finally {
+        	reader.close();
         } 
-		
-		JSONObject jsonObj = new JSONObject(jb.toString());
-		
-		System.out.println("JSON:" + jsonObj.toString());		
-		
-
-		ServletContext context = httpRequest.getSession().getServletContext();
-		String fullPath = context.getRealPath("/WEB-INF/config.json");
-
-		JSONParser parser = new JSONParser();
-
-		String loggerID = "", token = "", hostingID = "";
-
-		try {
-
-			Object obj = parser.parse(new FileReader(fullPath));
-
-			org.json.simple.JSONObject jsonObject = (org.json.simple.JSONObject) obj;
-
-			loggerID = (String) jsonObject.get("loggerID");
-			hostingID = (String) jsonObject.get("hostingID");
-			token = (String) jsonObject.get("token");
-
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-				  
-
-		String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-		String dataType = "REQUEST";
-
-		System.out.println("At filter!");
-		
-		final String id = jsonObj.getString("id");
-		String data = jsonObj.getString("xacmlReq");
+		//this.context.log("Retrieved request body:\n"+jb.toString());
 		
 		
-		System.out.println("ID:"+ id);						
+		/* *
+		 * 
+		 *		Request filter. Send to monitoring just Request xmls
+		 * 
+		 * */
+		if(content_type && httpRequest.getHeader("content-type").equals("application/xml+xacml")){
+			
+			// Parameters for Monitoring
+			
+			String requestorID = "", token = "", monitoringID = "", loggerID = "", timeStamp = "", dataType = "", data = "";
+			
+			/* 
+			 *  Parameters set-up for Monitoring service
+			 */
+			timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+			//this.context.log("timeStamp setted up: timeStamp="+timeStamp);
+			
+			//this.context.log("Trying to parse the xml");
+			SAXBuilder saxBuilder = new SAXBuilder();
+			InputSource is = new InputSource();
+			is.setCharacterStream(new StringReader(jb.toString()));
+			Document doc = new Document();
+			try {
+			    doc = saxBuilder.build(is);
+			} catch (JDOMException e) {
+			    // handle JDOMException
+			} catch (IOException e) {
+			    // handle IOException
+			}
+			
+			Element root = doc.getRootElement();
+			
+			// Proceed to post Monitoring in Request xml
+			if (root.getName().equals("Request")) {
+				//this.context.log("Request xml. Proceed to retrieving parameters from parser..");
+				List<Element> attrs = root.getChildren();
+		    
+				Element child = getElement(attrs);
+				
+				String req_type = child.getAttributeValue("Category");
+				monitoringID = getChildrenAttributeValue(child,"urn:sunfish:attribute:request:path");
+				
+				if (req_type.contains("response")){
+					//CREATE JSON for response data
+					//this.context.log("It is a response!");
+					String decision = "", body = "";
+					
+					decision = getChildrenAttributeValue(child, "urn:sunfish:attribute:response:response-code");
+					decision = decision.replace("\n", "");
+					decision = decision.replace(" ", "");
 
-		final String urlString = "https://sp.sunfish.com:8075/api/monitoring/store";
+					body = Base64.encodeBase64String(doc.toString().getBytes());
+		    	
+					//Create the Json for data field.
+					JSONObject obj = new JSONObject();
+					obj.put("decision", decision);
+					obj.put("body", body);
+					data = obj.toString().replace(" ", "");
+					//this.context.log("data value is " + data);
+		    	
+				} else {
+					//Encode request
+					//this.context.log("It is a request!");
+		    	
+					// encode data on your side using BASE64
+					data = Base64.encodeBase64String(doc.toString().getBytes());
+					//this.context.log("data value is " + data);
+				}
+		    
+		    
+				// ************* LOADING THE config.json ****************//
+			
+				String fullPath = this.catalina_home + "params.json";
+				//this.context.log("Retrieved path: "+fullPath +" to load network and missing params.");
+		 			
+				JSONParser parser = new JSONParser();
 
-		final org.json.simple.JSONObject obj = new org.json.simple.JSONObject();
-
-		obj.put("loggerID", loggerID);
-		obj.put("timeStamp", timeStamp);
-		obj.put("token", token);
-		obj.put("dataType", dataType);
-		obj.put("data", data);
-		obj.put("id", id);
-
-		Thread thread = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				HttpClient httpClient = HttpClientBuilder.create().build(); 																																						
+				String ServerIP = "", Port = "", Path = "";
 
 				try {
-					HttpPost req = new HttpPost(urlString);
-					StringEntity params = new StringEntity(obj.toJSONString());
-					req.addHeader("content-type", "application/json");
-					req.setEntity(params);
-					HttpResponse response = httpClient.execute(req);
-					System.out.println("Received response:" + response.toString());
-					//no need to handle any response here, move on....
-				} catch (Exception ex) {
-					// handle exception here
-					System.out.println("Error:" + ex);
-				} finally {
-					// Deprecated
-					// httpClient.getConnectionManager().shutdown();
+					//this.context.log("Loading the json object with parser");
+					Object obj = parser.parse(new FileReader(fullPath));
+		 				
+					org.json.simple.JSONObject jsonObject = (org.json.simple.JSONObject) obj;
+
+					ServerIP = (String) jsonObject.get("ServerIP");
+					Port = (String) jsonObject.get("Port");
+					Path = (String) jsonObject.get("Path");
+					loggerID = (String) jsonObject.get("loggerID");
+					requestorID = (String) jsonObject.get("requestorID");
+					token = (String) jsonObject.get("token");
+					dataType = (String) jsonObject.get("dataType");
+					this.context.log("Missing and network params loaded.");
+
+				} catch (Exception e) {
+					e.printStackTrace();
+					this.context.log("Error in json loading for params");
 				}
-			}
-		});
-		thread.start();
-
-		final HttpServletResponse response = (HttpServletResponse) servletResponse;
-
-		final ByteArrayPrintWriter pw = new ByteArrayPrintWriter();
-		HttpServletResponse wrappedResp = new HttpServletResponseWrapper(response) {
-			public PrintWriter getWriter() {
-				return pw.getWriter();
-			}
-
-			public ServletOutputStream getOutputStream() {
-				return pw.getStream();
-			}
-
-		};
-
-		filterChain.doFilter(multiReadRequest, wrappedResp);
-		
-		if(hostingID.equals("PDP")){
-			byte[] bytes = pw.toByteArray();
-			response.getOutputStream().write(bytes);
-
-			String returnResponse = new String(bytes);
+		 			
+				// ************* FINISH *************** //
+		    
+		 	
+		    
+				final String urlString = "http://"+ServerIP+":"+Port+"/"+Path;
+				this.context.log("Preparing to POST the Monitor component at: " + urlString);
 			
-			System.out.println("Return Response:" + returnResponse);
+				final org.json.simple.JSONObject obj = new org.json.simple.JSONObject();
 
-			final String encodedResponse = Base64.encodeBase64URLSafeString(returnResponse.getBytes());
-
-			final String respLoggerID = loggerID, respToken = token;
-
-			Thread responseThread = new Thread(new Runnable() {
-				@Override
-				public void run() {
-					try {
-						Thread.sleep(15000);
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
+				obj.put("requestorID", requestorID);
+				obj.put("token", token);
+				obj.put("monitoringID", monitoringID);
+				obj.put("loggerID", loggerID);
+				obj.put("timeStamp", timeStamp);		
+				obj.put("dataType", dataType);
+				obj.put("data", data);
+		
+				this.context.log("Json for monitoring ready:\n\n"+obj.toString());
+				Thread thread = new Thread(new Runnable() {
+					@Override
+					public void run() {
+						HttpClient httpClient = HttpClientBuilder.create().build(); 																																						
+						//System.out.println("Prova0");
+						try {
+							//System.out.println("Prova1");
+							HttpPost req = new HttpPost(urlString);
+							//System.out.println("Prova2");
+							StringEntity params = new StringEntity(obj.toString());
+							//System.out.println("Prova3");
+							req.addHeader("content-type", "application/json");
+							//System.out.println("Prova4");
+							req.addHeader("Accept", "application/json");
+							//System.out.println("Prova5");
+							req.setEntity(params);
+							//System.out.print("!!!!!!!!!!!!! CI SONO !!!!!!!!!!!!");
+							HttpResponse response = httpClient.execute(req);
+							context.log("Received response from MONITORING:" + response.toString());
+							//System.out.print("Received response from MONITORING:" + response.toString());
+							//no need to handle any response here, move on....
+						} catch (Exception ex) {
+							// handle exception here
+							context.log("Error:" + ex);
+							//System.out.println("Error:" + ex);
+						} finally {
+							// Deprecated
+							// httpClient.getConnectionManager().shutdown();
+						}
 					}
-					HttpClient httpClient = HttpClientBuilder.create().build(); 
-					
-					String respTimeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-					String respDataType = "RESPONSE";
-					org.json.simple.JSONObject obj = new org.json.simple.JSONObject();
-
-					obj.put("loggerID", respLoggerID);
-					obj.put("timeStamp", respTimeStamp);
-					obj.put("token", respToken);
-					obj.put("dataType", respDataType);
-					obj.put("data", encodedResponse);
-					obj.put("id", id);
-
-					try {
-						HttpPost req = new HttpPost(urlString);
-						StringEntity params = new StringEntity(obj.toJSONString());
-						req.addHeader("content-type", "application/json");
-						req.setEntity(params);
-						HttpResponse response = httpClient.execute(req);
-						// no handle to response, move on...
-					} catch (Exception ex) {
-
-						// handle exception here
-						System.out.println("Error:" + ex);
-
-					} finally {
-						// Deprecated
-						// httpClient.getConnectionManager().shutdown();
-					}
-				}
-			});
-			responseThread.start();
-		}
+				});
+				thread.start();		    
+			} else 
+				this.context.log("OPS! Not tag Request in xml.");			
+		}		
+		filterChain.doFilter(multiReadRequest, response);
 	}
 
 	public void destroy() {
 	}
+	
+	public static Element getElement(List<Element> elements) {
+	    for (Element e : elements){
+	    	if (e.getAttributeValue("Category").equals("urn:sunfish:attribute-category:request")){
+	    		return e;
+	    	}
+	    	if (e.getAttributeValue("Category").equals("urn:sunfish:attribute-category:response")) {
+	    		return e;
+	    	}	
+	    }
+		return null;
+	}
+	
+	public static String getChildrenAttributeValue(Element parent, String attrId){
+		String value = "";
+		for (Element e : parent.getChildren()){
+    		if (e.getAttributeValue("AttributeId").equals(attrId)){
+    			value = e.getValue().toString();
+    		}
+    	}
+		return value;
+	}
 
 	public void init(FilterConfig arg0) throws ServletException {
 		// TODO Auto-generated method stub
-
+		this.context = arg0.getServletContext();
+		this.req_count = 0;
+		this.res_count = 0;
+		//this.count = 0;
+		this.context.log("SUNFISH ProxyFilter initialized");
 	}
 
 }
