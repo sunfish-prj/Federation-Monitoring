@@ -1,0 +1,9 @@
+{
+   "loggerID":"PDP",
+   "ServerIP":"172.16.22.139",
+   "Port":"8089",
+   "Path":"sli/monitoring/store",
+   "requestorID":"TODO",
+   "token":"TODO",
+   "dataType":"REQUEST"
+}
