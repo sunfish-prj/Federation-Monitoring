@@ -1,0 +1,18 @@
+// To simulate XACML semantics in policy evaluation set the option 'Simulate XACML Semantics' to 'true' in the PAS main
+PolicySet anon_proxy_https { deny-overrides - greedy
+	target: 
+		( map ( equal , service / id , "129.27.142.49" ) && map ( equal , response / path , "demo-app" ) ) || ( map (
+			equal , service / id , "129.27.142.49" ) && map ( equal , request / path , "demo-app" ) ) policies:
+	Rule anon ( 
+		permit 
+		target: 
+			map ( equal , response / method , "GET" ) && map ( equal , response / response-code , 200 )
+		obl:
+			[ M anon ( ) ] )
+	
+	Rule mask_passthrough ( 
+		permit 
+		target: 
+			map ( equal , request / method , "GET" )
+	)
+}

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Policy xmlns="urn:oasis:names:tc:xacml:3.0:core:schema:wd-17" xmlns:ns2="urn:sunfish" PolicyId="urn:sunfish:policy:check-authentication-proxy-https" Version="1.0" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:deny-overrides">
+    <Description>Check authentication of users connecting to application demoapp</Description>
+    <Target>
+        <AnyOf>
+            <AllOf>
+                <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">129.27.142.49</AttributeValue>
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:service" AttributeId="urn:sunfish:attribute:id" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+                </Match>
+                <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">/demo-app/</AttributeValue>
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:request" AttributeId="urn:sunfish:attribute:request:path" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+                </Match>
+                <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">GET</AttributeValue>
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:request" AttributeId="urn:sunfish:attribute:request:method" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+                </Match>
+            </AllOf>
+        </AnyOf>
+    </Target>
+    <Rule RuleId="urn:sunfish:rule:permit-users" Effect="Permit">
+        <Target/>
+        <Condition>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-at-least-one-member-of">
+                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag">
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">user</AttributeValue>
+                </Apply>
+                <AttributeDesignator Category="urn:sunfish:attribute-category:identity" AttributeId="urn:sunfish:attribute:tenant-role" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+            </Apply>
+        </Condition>
+    </Rule>
+    <Rule RuleId="urn:sunfish:rule:issue-authentication-obligation" Effect="Deny">
+        <Target/>
+        <Condition>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:integer-equal">
+                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag-size">
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:identity" AttributeId="urn:sunfish:attribute:tenant-role" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+                </Apply>
+                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">0</AttributeValue>
+            </Apply>
+        </Condition>
+        <ObligationExpressions>
+            <ObligationExpression ObligationId="urn:sunfish:attribute:obligation:authenticate" FulfillOn="Deny"/>
+        </ObligationExpressions>
+    </Rule>
+    <Rule RuleId="urn:sunfish:rule:deny-others" Effect="Deny">
+        <Target/>
+        <Condition>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-at-least-one-member-of">
+                    <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag">
+                        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">user</AttributeValue>
+                    </Apply>
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:identity" AttributeId="urn:sunfish:attribute:tenant-role" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+                </Apply>
+            </Apply>
+        </Condition>
+    </Rule>
+</Policy>

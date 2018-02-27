@@ -1,0 +1,12 @@
+// To simulate XACML semantics in policy evaluation set the option 'Simulate XACML Semantics' to 'true' in the PAS main
+PolicySet dum_proxy { deny-overrides - greedy
+	target: ( map ( equal , service / id , "129.27.142.49" ) && map ( equal , request / path , " dem_app_dem
+			"))||(map (equal , service/ id , "129.27.142.49" ) && map ( equal , response / path , " dem_app_dem "))
+policies: 
+Rule unmask (permit 
+	target: map (equal , request/ method , "POST" ) 
+	obl: [ M mask ( ) ]
+) 
+Rule unmask_passthrough ( permit
+			target: map ( equal , response / method , "POST" ) && map ( equal , response / response - code , 200 ) 
+) }

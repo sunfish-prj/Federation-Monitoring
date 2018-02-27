@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Policy xmlns="urn:oasis:names:tc:xacml:3.0:core:schema:wd-17" xmlns:ns2="urn:sunfish" PolicyId="urn:sunfish:policy:dum-proxy" Version="1.0" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:deny-overrides">
+    <Description>Data Masking Demo Policy</Description>
+    <Target>
+        <AnyOf>
+            <AllOf>
+                <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">129.27.142.49</AttributeValue>
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:service" AttributeId="urn:sunfish:attribute:id" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+                </Match>
+                <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">/demo-app/dum</AttributeValue>
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:request" AttributeId="urn:sunfish:attribute:request:path" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+                </Match>
+            </AllOf>
+            <AllOf>
+                <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">129.27.142.49</AttributeValue>
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:service" AttributeId="urn:sunfish:attribute:id" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+                </Match>
+                <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">/demo-app/dum</AttributeValue>
+                    <AttributeDesignator Category="urn:sunfish:attribute-category:response" AttributeId="urn:sunfish:attribute:request:path" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+                </Match>
+            </AllOf>
+        </AnyOf>
+    </Target>
+    <Rule RuleId="urn:sunfish:rule:unmask" Effect="Permit">
+        <Target>
+            <AnyOf>
+                <AllOf>
+                    <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">POST</AttributeValue>
+                        <AttributeDesignator Category="urn:sunfish:attribute-category:request" AttributeId="urn:sunfish:attribute:request:method" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+                    </Match>
+                </AllOf>
+            </AnyOf>
+        </Target>
+        <ObligationExpressions>
+            <ObligationExpression ObligationId="urn:sunfish:obligation:id:mask" FulfillOn="Permit">
+                <AttributeAssignmentExpression AttributeId="urn:sunfish:obligation">
+                    <ns2:SunfishObligationExpression ObligationId="decrypt" MaskingContext="e6094c17-eeb6-457c-ac4f-1c091ab6bec0" MaskingPolicyId="cf14c276-4767-4a42-ac8c-9d1dce85c3b9"/>
+                </AttributeAssignmentExpression>
+            </ObligationExpression>
+        </ObligationExpressions>
+    </Rule>
+    <Rule RuleId="urn:sunfish:rule:unmask-passthrough" Effect="Permit">
+        <Target>
+            <AnyOf>
+                <AllOf>
+                    <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">POST</AttributeValue>
+                        <AttributeDesignator Category="urn:sunfish:attribute-category:response" AttributeId="urn:sunfish:attribute:request:method" DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+                    </Match>
+                    <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:integer-equal">
+                        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#integer">200</AttributeValue>
+                        <AttributeDesignator Category="urn:sunfish:attribute-category:response" AttributeId="urn:sunfish:attribute:response:response-code" DataType="http://www.w3.org/2001/XMLSchema#integer" MustBePresent="true"/>
+                    </Match>
+                </AllOf>
+            </AnyOf>
+        </Target>
+    </Rule>
+</Policy>

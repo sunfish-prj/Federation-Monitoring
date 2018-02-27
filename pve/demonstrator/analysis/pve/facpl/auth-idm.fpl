@@ -1,0 +1,19 @@
+// To simulate XACML semantics in policy evaluation set the option 'Simulate XACML Semantics' to 'true' in the PAS main
+PolicySet check_authentication_proxy_https { deny-overrides - greedy
+	target: 
+		map ( equal , service / id , "129.27.142.49" )
+		&& map ( equal , request / path , "demo-app" ) 
+		&& map ( equal , request / method , "GET" ) 
+	policies:
+		Rule permit_users ( permit target: in ( set( "user" ) , identity / tenant-role ) )
+		Rule issue_authentication_obligation ( 
+			deny
+			target: 
+				equal ( identity / tenant - role , 0 ) 
+			obl:
+				[ M authenticate ( ) ] )
+	Rule deny_others ( deny 
+		target: 
+			! ( in ( set( "user" ) , identity / tenant-role ) )
+	)
+}
